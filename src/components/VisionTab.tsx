@@ -3,11 +3,12 @@ import { ModelCategory } from '@runanywhere/web';
 import { VideoCapture, VLMWorkerBridge } from '@runanywhere/web-llamacpp';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
+import { getPrivacyMode } from '../privacy';
 
-const LIVE_INTERVAL_MS = 2500;
-const LIVE_MAX_TOKENS = 30;
-const SINGLE_MAX_TOKENS = 80;
-const CAPTURE_DIM = 256; // CLIP resizes internally; larger is wasted work
+const LIVE_INTERVAL_MS = 2000;
+const LIVE_MAX_TOKENS = 25;
+const SINGLE_MAX_TOKENS = 60;
+const CAPTURE_DIM = 256;
 
 interface VisionResult {
   text: string;
@@ -29,7 +30,6 @@ export function VisionTab() {
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveModeRef = useRef(false);
 
-  // Keep refs in sync with state so interval callbacks see latest values
   processingRef.current = processing;
   liveModeRef.current = liveMode;
 
@@ -54,7 +54,6 @@ export function VisionTab() {
     setCameraActive(true);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
@@ -76,7 +75,6 @@ export function VisionTab() {
     const cam = captureRef.current;
     if (!cam?.isCapturing) return;
 
-    // Ensure model loaded
     if (loader.state !== 'ready') {
       const ok = await loader.ensure();
       if (!ok) return;
@@ -89,7 +87,7 @@ export function VisionTab() {
     processingRef.current = true;
     setError(null);
 
-    const t0 = performance.now();
+    const startTime = performance.now();
 
     try {
       const bridge = VLMWorkerBridge.shared;
@@ -102,10 +100,11 @@ export function VisionTab() {
         frame.width,
         frame.height,
         prompt,
-        { maxTokens, temperature: 0.6 },
+        { maxTokens, temperature: 0.5, topP: 0.9 },
       );
 
-      setResult({ text: res.text, totalMs: performance.now() - t0 });
+      const totalMs = Math.round(performance.now() - startTime);
+      setResult({ text: res.text, totalMs });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isWasmCrash = msg.includes('memory access out of bounds')
@@ -145,10 +144,8 @@ export function VisionTab() {
     setLiveMode(true);
     liveModeRef.current = true;
 
-    // Immediately describe first frame
     describeFrame(LIVE_MAX_TOKENS);
 
-    // Then poll every 2.5s — skips ticks while inference is running
     liveIntervalRef.current = setInterval(() => {
       if (!processingRef.current && liveModeRef.current) {
         describeFrame(LIVE_MAX_TOKENS);

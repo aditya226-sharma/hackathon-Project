@@ -63,18 +63,42 @@ export default defineConfig({
   plugins: [react(), copyWasmPlugin()],
   server: {
     headers: {
-      // Cross-Origin Isolation — required for SharedArrayBuffer / multi-threaded WASM.
-      // Without these headers the SDK falls back to single-threaded mode.
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+  },
+  build: {
+    target: 'esnext',
+    minify: 'terser',
+    cssMinify: true,
+    reportCompressedSize: false,
+    chunkSizeWarningLimit: 1000,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react': ['react', 'react-dom'],
+          'sdk': ['@runanywhere/web'],
+          'llamacpp': ['@runanywhere/web-llamacpp'],
+          'onnx': ['@runanywhere/web-onnx'],
+        },
+        assetFileNames: 'assets/[name].[hash][extname]',
+        chunkFileNames: 'assets/[name].[hash].js',
+        entryFileNames: 'assets/[name].[hash].js',
+      },
+    },
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log'],
+      },
     },
   },
   assetsInclude: ['**/*.wasm'],
   worker: { format: 'es' },
   optimizeDeps: {
-    // Exclude WASM-bearing packages from pre-bundling so their
-    // import.meta.url resolves correctly to node_modules paths
-    // (needed for automatic WASM file discovery at ../../wasm/).
     exclude: ['@runanywhere/web-llamacpp', '@runanywhere/web-onnx'],
+    include: ['react', 'react-dom'],
   },
 });

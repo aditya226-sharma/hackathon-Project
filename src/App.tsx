@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { initSDK, getAccelerationMode } from './runanywhere';
-import { ChatTab } from './components/ChatTab';
-import { VisionTab } from './components/VisionTab';
-import { VoiceTab } from './components/VoiceTab';
+import { getPrivacyMode, setPrivacyMode } from './privacy';
+
+const ChatTab = lazy(() => import('./components/ChatTab').then(m => ({ default: m.ChatTab })));
+const VisionTab = lazy(() => import('./components/VisionTab').then(m => ({ default: m.VisionTab })));
+const VoiceTab = lazy(() => import('./components/VoiceTab').then(m => ({ default: m.VoiceTab })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 
 type Tab = 'chat' | 'vision' | 'voice';
 
@@ -10,11 +13,36 @@ export function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [privacyMode, setPrivacyModeState] = useState(getPrivacyMode());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+    
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Preload critical resources
+    const preloadLink = document.createElement('link');
+    preloadLink.rel = 'preload';
+    preloadLink.as = 'fetch';
+    preloadLink.href = 'https://huggingface.co';
+    document.head.appendChild(preloadLink);
+    
     initSDK()
       .then(() => setSdkReady(true))
       .catch((err) => setSdkError(err instanceof Error ? err.message : String(err)));
+      
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   if (sdkError) {
@@ -38,11 +66,50 @@ export function App() {
 
   const accel = getAccelerationMode();
 
+  const togglePrivacy = () => {
+    const newMode = !privacyMode;
+    setPrivacyMode(newMode);
+    setPrivacyModeState(newMode);
+  };
+
   return (
     <div className="app">
       <header className="app-header">
         <h1>RunAnywhere AI</h1>
-        {accel && <span className="badge">{accel === 'webgpu' ? 'WebGPU' : 'CPU'}</span>}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {!isOnline && (
+            <span 
+              className="badge" 
+              style={{ background: 'var(--green)', fontSize: '10px' }}
+              title="Offline Mode - All AI runs on your device"
+            >
+              ⚡ OFFLINE
+            </span>
+          )}
+          {accel && <span className="badge">{accel === 'webgpu' ? 'WebGPU' : 'CPU'}</span>}
+          <button 
+            className="btn btn-sm" 
+            onClick={togglePrivacy}
+            style={{ 
+              background: privacyMode ? 'var(--green)' : 'var(--bg-card)',
+              color: privacyMode ? 'white' : 'var(--text)',
+              border: privacyMode ? 'none' : '1px solid var(--border)',
+              padding: '4px 10px',
+              fontSize: '11px'
+            }}
+            title={privacyMode ? 'Privacy Mode: ON - All data stays on your device' : 'Privacy Mode: OFF - Data may be logged'}
+          >
+            🔒 {privacyMode ? 'Private' : 'Logging'}
+          </button>
+          <button 
+            className="btn btn-sm" 
+            onClick={() => setShowSettings(true)}
+            style={{ padding: '4px 10px', fontSize: '11px' }}
+            title="Data & Privacy Settings"
+          >
+            ⚙️
+          </button>
+        </div>
       </header>
 
       <nav className="tab-bar">
@@ -58,10 +125,18 @@ export function App() {
       </nav>
 
       <main className="tab-content">
-        {activeTab === 'chat' && <ChatTab />}
-        {activeTab === 'vision' && <VisionTab />}
-        {activeTab === 'voice' && <VoiceTab />}
+        <Suspense fallback={<div className="spinner" />}>
+          {activeTab === 'chat' && <ChatTab />}
+          {activeTab === 'vision' && <VisionTab />}
+          {activeTab === 'voice' && <VoiceTab />}
+        </Suspense>
       </main>
+
+      {showSettings && (
+        <Suspense fallback={null}>
+          <SettingsModal onClose={() => setShowSettings(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

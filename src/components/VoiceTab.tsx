@@ -3,6 +3,7 @@ import { VoicePipeline, ModelCategory, ModelManager } from '@runanywhere/web';
 import { AudioCapture, AudioPlayback, VAD, SpeechActivity } from '@runanywhere/web-onnx';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
+import { getPrivacyMode } from '../privacy';
 
 type VoiceState = 'idle' | 'loading-models' | 'listening' | 'processing' | 'speaking';
 
@@ -22,7 +23,6 @@ export function VoiceTab() {
   const pipelineRef = useRef<VoicePipeline | null>(null);
   const vadUnsub = useRef<(() => void) | null>(null);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       micRef.current?.stop();
@@ -35,14 +35,14 @@ export function VoiceTab() {
     setVoiceState('loading-models');
     setError(null);
 
-    const results = await Promise.all([
+    const [vad, stt, llm, tts] = await Promise.all([
       vadLoader.ensure(),
       sttLoader.ensure(),
       llmLoader.ensure(),
       ttsLoader.ensure(),
     ]);
 
-    if (results.every(Boolean)) {
+    if (vad && stt && llm && tts) {
       setVoiceState('idle');
       return true;
     }
@@ -58,7 +58,6 @@ export function VoiceTab() {
     setResponse('');
     setError(null);
 
-    // Load models if needed
     const anyMissing = !ModelManager.getLoadedModel(ModelCategory.Audio)
       || !ModelManager.getLoadedModel(ModelCategory.SpeechRecognition)
       || !ModelManager.getLoadedModel(ModelCategory.Language)
@@ -78,7 +77,6 @@ export function VoiceTab() {
       pipelineRef.current = new VoicePipeline();
     }
 
-    // Start VAD + mic
     VAD.reset();
 
     vadUnsub.current = VAD.onSpeechActivity((activity) => {
@@ -96,20 +94,20 @@ export function VoiceTab() {
     );
   }, [ensureModels]);
 
-  // Process a speech segment through the full pipeline
   const processSpeech = useCallback(async (audioData: Float32Array) => {
     const pipeline = pipelineRef.current;
     if (!pipeline) return;
 
-    // Stop mic during processing
     micRef.current?.stop();
     vadUnsub.current?.();
     setVoiceState('processing');
 
     try {
       const result = await pipeline.processTurn(audioData, {
-        maxTokens: 60,
-        temperature: 0.7,
+        maxTokens: 40,
+        temperature: 0.6,
+        topP: 0.9,
+        topK: 40,
         systemPrompt: 'You are a helpful voice assistant. Keep responses concise — 1-2 sentences max.',
       }, {
         onTranscription: (text) => {
@@ -153,7 +151,6 @@ export function VoiceTab() {
     setAudioLevel(0);
   }, []);
 
-  // Which loaders are still loading?
   const pendingLoaders = [
     { label: 'VAD', loader: vadLoader },
     { label: 'STT', loader: sttLoader },

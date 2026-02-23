@@ -21,7 +21,7 @@ export function ModelBanner({ state, progress, error, onLoad, label }: Props) {
       )}
       {state === 'downloading' && (
         <>
-          <span>Downloading {label} model... {(progress * 100).toFixed(0)}%</span>
+          <span>Downloading {label} model... {Math.round(progress * 100)}%</span>
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progress * 100}%` }} />
           </div>

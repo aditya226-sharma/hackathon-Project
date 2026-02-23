@@ -26,7 +26,6 @@ export function useModelLoader(category: ModelCategory, coexist = false): ModelL
   const loadingRef = useRef(false);
 
   const ensure = useCallback(async (): Promise<boolean> => {
-    // Already loaded
     if (ModelManager.getLoadedModel(category)) {
       setState('ready');
       return true;
@@ -36,7 +35,6 @@ export function useModelLoader(category: ModelCategory, coexist = false): ModelL
     loadingRef.current = true;
 
     try {
-      // Find a model for this category
       const models = ModelManager.getModels().filter((m) => m.modality === category);
       if (models.length === 0) {
         setError(`No ${category} model registered`);
@@ -46,7 +44,6 @@ export function useModelLoader(category: ModelCategory, coexist = false): ModelL
 
       const model = models[0];
 
-      // Download if needed
       if (model.status !== 'downloaded' && model.status !== 'loaded') {
         setState('downloading');
         setProgress(0);
@@ -62,7 +59,6 @@ export function useModelLoader(category: ModelCategory, coexist = false): ModelL
         setProgress(1);
       }
 
-      // Load
       setState('loading');
       const ok = await ModelManager.loadModel(model.id, { coexist });
       if (ok) {
