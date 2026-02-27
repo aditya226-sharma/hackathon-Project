@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { initSDK, getAccelerationMode } from './runanywhere';
 import { getPrivacyMode, setPrivacyMode } from './privacy';
+import { HoneyPotApp } from './HoneyPotApp';
 
 const ChatTab = lazy(() => import('./components/ChatTab').then(m => ({ default: m.ChatTab })));
 const VisionTab = lazy(() => import('./components/VisionTab').then(m => ({ default: m.VisionTab })));
@@ -17,6 +18,7 @@ interface ChatSession {
 }
 
 export function App() {
+  const [showHoneyPot, setShowHoneyPot] = useState(false);
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('chat');
@@ -82,6 +84,11 @@ export function App() {
   }
 
   const accel = getAccelerationMode();
+
+  // Show HoneyPot dashboard if requested
+  if (showHoneyPot) {
+    return <HoneyPotApp />;
+  }
 
   const togglePrivacy = () => {
     const newMode = !privacyMode;
@@ -164,6 +171,13 @@ export function App() {
             title="Data & Privacy Settings"
           >
             ⚙️
+          </button>
+          <button 
+            className="btn btn-sm" 
+            onClick={() => setShowHoneyPot(true)}
+            title="HoneyPot Dashboard"
+          >
+            🛡️ HoneyPot
           </button>
         </div>
       </header>

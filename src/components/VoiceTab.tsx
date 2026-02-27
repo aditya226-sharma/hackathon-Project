@@ -116,8 +116,6 @@ export function VoiceTab() {
       const result = await pipeline.processTurn(audioData, {
         maxTokens: 40,
         temperature: 0.6,
-        topP: 0.9,
-        topK: 40,
         systemPrompt: 'You are a helpful voice assistant. Keep responses concise — 1-2 sentences max.',
       }, {
         onTranscription: (text) => {

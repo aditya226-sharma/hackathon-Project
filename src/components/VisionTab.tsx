@@ -110,7 +110,7 @@ export function VisionTab() {
         frame.width,
         frame.height,
         prompt,
-        { maxTokens, temperature: 0.5, topP: 0.9 },
+        { maxTokens, temperature: 0.5 },
       );
 
       const totalMs = Math.round(performance.now() - startTime);
