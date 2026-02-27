@@ -9,6 +9,13 @@ const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => 
 
 type Tab = 'chat' | 'vision' | 'voice';
 
+interface ChatSession {
+  id: string;
+  title: string;
+  timestamp: number;
+  messages: Array<{ role: string; text: string }>;
+}
+
 export function App() {
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -16,6 +23,9 @@ export function App() {
   const [privacyMode, setPrivacyModeState] = useState(getPrivacyMode());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showSettings, setShowSettings] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -28,7 +38,14 @@ export function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     
-    // Preload critical resources
+    // Load chat sessions from localStorage
+    const saved = localStorage.getItem('chatSessions');
+    if (saved) {
+      try {
+        setChatSessions(JSON.parse(saved));
+      } catch {}
+    }
+    
     const preloadLink = document.createElement('link');
     preloadLink.rel = 'preload';
     preloadLink.as = 'fetch';
@@ -72,39 +89,78 @@ export function App() {
     setPrivacyModeState(newMode);
   };
 
+  const saveSession = (messages: Array<{ role: string; text: string }>) => {
+    if (messages.length === 0) return;
+    
+    const sessionId = currentSessionId || Date.now().toString();
+    const title = messages[0]?.text.slice(0, 50) || 'New Chat';
+    
+    const newSession: ChatSession = {
+      id: sessionId,
+      title,
+      timestamp: Date.now(),
+      messages
+    };
+    
+    const updated = chatSessions.filter(s => s.id !== sessionId);
+    updated.unshift(newSession);
+    setChatSessions(updated);
+    localStorage.setItem('chatSessions', JSON.stringify(updated));
+    setCurrentSessionId(sessionId);
+  };
+
+  const loadSession = (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+    setShowHistory(false);
+  };
+
+  const newChat = () => {
+    setCurrentSessionId(null);
+    setShowHistory(false);
+    // Force ChatTab to reset by triggering a re-render
+    const event = new CustomEvent('newChat');
+    window.dispatchEvent(event);
+  };
+
+  const deleteSession = (sessionId: string) => {
+    const updated = chatSessions.filter(s => s.id !== sessionId);
+    setChatSessions(updated);
+    localStorage.setItem('chatSessions', JSON.stringify(updated));
+    if (currentSessionId === sessionId) setCurrentSessionId(null);
+  };
+
   return (
     <div className="app">
       <header className="app-header">
-        <h1>RunAnywhere AI</h1>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="header-brand">
+          {activeTab === 'chat' && (
+            <button className="btn btn-icon" onClick={() => setShowHistory(!showHistory)} title="Chat History">
+              📚
+            </button>
+          )}
+          <div className="logo-icon">🤖</div>
+          <div>
+            <h1>RunAnywhere AI</h1>
+            <p className="header-subtitle">On-Device Intelligence</p>
+          </div>
+        </div>
+        <div className="header-controls">
           {!isOnline && (
-            <span 
-              className="badge" 
-              style={{ background: 'var(--green)', fontSize: '10px' }}
-              title="Offline Mode - All AI runs on your device"
-            >
+            <span className="badge badge-offline" title="Offline Mode - All AI runs on your device">
               ⚡ OFFLINE
             </span>
           )}
-          {accel && <span className="badge">{accel === 'webgpu' ? 'WebGPU' : 'CPU'}</span>}
+          {accel && <span className="badge badge-accel">{accel === 'webgpu' ? '🚀 WebGPU' : '⚙️ CPU'}</span>}
           <button 
-            className="btn btn-sm" 
+            className={`btn btn-sm btn-privacy ${privacyMode ? 'active' : ''}`}
             onClick={togglePrivacy}
-            style={{ 
-              background: privacyMode ? 'var(--green)' : 'var(--bg-card)',
-              color: privacyMode ? 'white' : 'var(--text)',
-              border: privacyMode ? 'none' : '1px solid var(--border)',
-              padding: '4px 10px',
-              fontSize: '11px'
-            }}
             title="Privacy Mode - All data stays on your device"
           >
-            🔒 Private
+            🔒 {privacyMode ? 'Private' : 'Standard'}
           </button>
           <button 
-            className="btn btn-sm" 
+            className="btn btn-sm btn-icon" 
             onClick={() => setShowSettings(true)}
-            style={{ padding: '4px 10px', fontSize: '11px' }}
             title="Data & Privacy Settings"
           >
             ⚙️
@@ -113,20 +169,46 @@ export function App() {
       </header>
 
       <nav className="tab-bar">
-        <button className={activeTab === 'chat' ? 'active' : ''} onClick={() => setActiveTab('chat')}>
-          💬 Chat
+        <button className={`tab-btn ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+          <span className="tab-icon">💬</span>
+          <span className="tab-label">Chat</span>
         </button>
-        <button className={activeTab === 'vision' ? 'active' : ''} onClick={() => setActiveTab('vision')}>
-          📷 Vision
+        <button className={`tab-btn ${activeTab === 'vision' ? 'active' : ''}`} onClick={() => setActiveTab('vision')}>
+          <span className="tab-icon">📷</span>
+          <span className="tab-label">Vision</span>
         </button>
-        <button className={activeTab === 'voice' ? 'active' : ''} onClick={() => setActiveTab('voice')}>
-          🎙️ Voice
+        <button className={`tab-btn ${activeTab === 'voice' ? 'active' : ''}`} onClick={() => setActiveTab('voice')}>
+          <span className="tab-icon">🎙️</span>
+          <span className="tab-label">Voice</span>
         </button>
       </nav>
 
       <main className="tab-content">
+        {showHistory && activeTab === 'chat' && (
+          <div className="history-sidebar">
+            <div className="history-header">
+              <h3>Chat History</h3>
+              <button className="btn btn-sm btn-primary" onClick={newChat}>+ New Chat</button>
+            </div>
+            <div className="history-list">
+              {chatSessions.length === 0 ? (
+                <div className="history-empty">No previous chats</div>
+              ) : (
+                chatSessions.map(session => (
+                  <div key={session.id} className="history-item">
+                    <div className="history-item-content" onClick={() => loadSession(session.id)}>
+                      <div className="history-title">{session.title}</div>
+                      <div className="history-time">{new Date(session.timestamp).toLocaleDateString()}</div>
+                    </div>
+                    <button className="history-delete" onClick={() => deleteSession(session.id)}>🗑️</button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
         <Suspense fallback={<div className="spinner" />}>
-          {activeTab === 'chat' && <ChatTab />}
+          {activeTab === 'chat' && <ChatTab sessionId={currentSessionId} onSave={saveSession} />}
           {activeTab === 'vision' && <VisionTab />}
           {activeTab === 'voice' && <VoiceTab />}
         </Suspense>

@@ -11,7 +11,12 @@ interface Message {
   stats?: { tokens: number; tokPerSec: number; latencyMs: number };
 }
 
-export function ChatTab() {
+interface ChatTabProps {
+  sessionId: string | null;
+  onSave: (messages: Array<{ role: string; text: string }>) => void;
+}
+
+export function ChatTab({ sessionId, onSave }: ChatTabProps) {
   const loader = useModelLoader(ModelCategory.Language);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -19,10 +24,40 @@ export function ChatTab() {
   const cancelRef = useRef<(() => void) | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Load session messages
+  useEffect(() => {
+    if (sessionId) {
+      const saved = localStorage.getItem('chatSessions');
+      if (saved) {
+        try {
+          const sessions = JSON.parse(saved);
+          const session = sessions.find((s: any) => s.id === sessionId);
+          if (session) setMessages(session.messages);
+        } catch {}
+      }
+    } else {
+      setMessages([]);
+    }
+  }, [sessionId]);
+
+  // Listen for new chat event
+  useEffect(() => {
+    const handleNewChat = () => {
+      setMessages([]);
+      setInput('');
+      setGenerating(false);
+    };
+    window.addEventListener('newChat', handleNewChat);
+    return () => window.removeEventListener('newChat', handleNewChat);
+  }, []);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages]);
+    if (listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+    if (messages.length > 0) onSave(messages);
+  }, [messages, onSave]);
 
   const send = useCallback(async () => {
     const text = input.trim();
@@ -35,12 +70,20 @@ export function ChatTab() {
 
     setInput('');
     const userMsg = { role: 'user' as const, text };
-    setMessages((prev) => [...prev, userMsg]);
     setGenerating(true);
 
-    const assistantIdx = messages.length + 1;
-    const placeholderMsg = { role: 'assistant' as const, text: '' };
-    setMessages((prev) => [...prev, placeholderMsg]);
+    let assistantIdx = 0;
+    setMessages((prev) => {
+      assistantIdx = prev.length + 1;
+      return [...prev, userMsg, { role: 'assistant' as const, text: '' }];
+    });
+
+    // Force scroll after state update
+    setTimeout(() => {
+      if (listRef.current) {
+        listRef.current.scrollTop = listRef.current.scrollHeight;
+      }
+    }, 0);
 
     const startTime = performance.now();
 
@@ -105,7 +148,7 @@ export function ChatTab() {
       cancelRef.current = null;
       setGenerating(false);
     }
-  }, [input, generating, messages.length, loader]);
+  }, [input, generating, messages.length, loader, onSave]);
 
   const handleCancel = () => {
     cancelRef.current?.();
@@ -162,11 +205,21 @@ export function ChatTab() {
         {messages.map((msg, i) => (
           <div key={i} className={`message message-${msg.role}`}>
             <div className="message-bubble">
-              <p>{msg.text || '...'}</p>
-              {msg.stats && (
-                <div className="message-stats">
-                  {msg.stats.tokens} tokens · {msg.stats.tokPerSec.toFixed(1)} tok/s · {Math.round(msg.stats.latencyMs)}ms
+              {msg.role === 'assistant' && !msg.text && generating ? (
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
+              ) : (
+                <>
+                  <p>{msg.text || '...'}</p>
+                  {msg.stats && (
+                    <div className="message-stats">
+                      {msg.stats.tokens} tokens · {msg.stats.tokPerSec.toFixed(1)} tok/s · {Math.round(msg.stats.latencyMs)}ms
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -179,7 +232,7 @@ export function ChatTab() {
       >
         <input
           type="text"
-          placeholder="Message..."
+          placeholder={generating ? "AI is thinking..." : "Message..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -191,9 +244,10 @@ export function ChatTab() {
           disabled={generating}
           autoComplete="off"
           autoFocus
+          className={generating ? 'input-thinking' : ''}
         />
         {generating ? (
-          <button type="button" className="btn" onClick={handleCancel}>Stop</button>
+          <button type="button" className="btn btn-stop" onClick={handleCancel}>⏹ Stop</button>
         ) : (
           <button type="submit" className="btn btn-primary" disabled={!input.trim()}>Send</button>
         )}

@@ -4,6 +4,7 @@ import { AudioCapture, AudioPlayback, VAD, SpeechActivity } from '@runanywhere/w
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
 import { getPrivacyMode } from '../privacy';
+import { saveVoiceData, exportVoiceJSON, exportVoiceCSV } from '../dataExport';
 
 type VoiceState = 'idle' | 'loading-models' | 'listening' | 'processing' | 'speaking';
 
@@ -18,12 +19,21 @@ export function VoiceTab() {
   const [response, setResponse] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
 
   const micRef = useRef<AudioCapture | null>(null);
   const pipelineRef = useRef<VoicePipeline | null>(null);
   const vadUnsub = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    const saved = localStorage.getItem('voiceData');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch {}
+    }
+    
     return () => {
       micRef.current?.stop();
       vadUnsub.current?.();
@@ -135,6 +145,15 @@ export function VoiceTab() {
       if (result) {
         setTranscript(result.transcription);
         setResponse(result.response);
+        
+        saveVoiceData({
+          timestamp: Date.now(),
+          transcript: result.transcription,
+          response: result.response
+        });
+        
+        const saved = localStorage.getItem('voiceData');
+        if (saved) setHistory(JSON.parse(saved));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -160,6 +179,31 @@ export function VoiceTab() {
 
   return (
     <div className="tab-panel voice-panel">
+      {showHistory && (
+        <div className="history-sidebar">
+          <div className="history-header">
+            <h3>Voice History</h3>
+            <button className="btn btn-sm btn-icon" onClick={() => setShowHistory(false)}>✕</button>
+          </div>
+          <div className="history-list">
+            {history.length === 0 ? (
+              <div className="history-empty">No previous voice interactions</div>
+            ) : (
+              history.slice().reverse().map((item, idx) => (
+                <div key={idx} className="history-item">
+                  <div className="history-item-content">
+                    <div className="history-title">{item.transcript.slice(0, 40)}...</div>
+                    <div className="history-time">{new Date(item.timestamp).toLocaleString()}</div>
+                    <div className="history-result">{item.response.slice(0, 60)}...</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
       {pendingLoaders.length > 0 && voiceState === 'idle' && (
         <ModelBanner
           state={pendingLoaders[0].loader.state}
@@ -213,6 +257,13 @@ export function VoiceTab() {
           <p>{response}</p>
         </div>
       )}
+      
+      <div className="voice-actions">
+        <button className="btn btn-sm" onClick={() => setShowHistory(!showHistory)}>📚 History</button>
+        <button className="btn btn-sm" onClick={exportVoiceJSON}>Export JSON</button>
+        <button className="btn btn-sm" onClick={exportVoiceCSV}>Export CSV</button>
+      </div>
+      </div>
     </div>
   );
 }

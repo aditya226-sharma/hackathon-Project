@@ -4,6 +4,7 @@ import { VideoCapture, VLMWorkerBridge } from '@runanywhere/web-llamacpp';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
 import { getPrivacyMode } from '../privacy';
+import { saveVisionData, exportVisionJSON, exportVisionCSV } from '../dataExport';
 
 const LIVE_INTERVAL_MS = 2000;
 const LIVE_MAX_TOKENS = 25;
@@ -23,6 +24,8 @@ export function VisionTab() {
   const [result, setResult] = useState<VisionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('Describe what you see briefly.');
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
 
   const videoMountRef = useRef<HTMLDivElement>(null);
   const captureRef = useRef<VideoCapture | null>(null);
@@ -55,6 +58,13 @@ export function VisionTab() {
   }, []);
 
   useEffect(() => {
+    const saved = localStorage.getItem('visionData');
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch {}
+    }
+    
     return () => {
       if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
       const cam = captureRef.current;
@@ -105,6 +115,17 @@ export function VisionTab() {
 
       const totalMs = Math.round(performance.now() - startTime);
       setResult({ text: res.text, totalMs });
+      
+      saveVisionData({
+        timestamp: Date.now(),
+        prompt,
+        result: res.text,
+        processingTime: totalMs,
+        mode: liveModeRef.current ? 'live' : 'single'
+      });
+      
+      const saved = localStorage.getItem('visionData');
+      if (saved) setHistory(JSON.parse(saved));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isWasmCrash = msg.includes('memory access out of bounds')
@@ -175,6 +196,31 @@ export function VisionTab() {
   // ------------------------------------------------------------------
   return (
     <div className="tab-panel vision-panel">
+      {showHistory && (
+        <div className="history-sidebar">
+          <div className="history-header">
+            <h3>Vision History</h3>
+            <button className="btn btn-sm btn-icon" onClick={() => setShowHistory(false)}>✕</button>
+          </div>
+          <div className="history-list">
+            {history.length === 0 ? (
+              <div className="history-empty">No previous vision results</div>
+            ) : (
+              history.slice().reverse().map((item, idx) => (
+                <div key={idx} className="history-item">
+                  <div className="history-item-content">
+                    <div className="history-title">{item.prompt.slice(0, 40)}...</div>
+                    <div className="history-time">{new Date(item.timestamp).toLocaleString()}</div>
+                    <div className="history-result">{item.result.slice(0, 60)}...</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+      
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <ModelBanner
         state={loader.state}
         progress={loader.progress}
@@ -241,6 +287,13 @@ export function VisionTab() {
           )}
         </div>
       )}
+      
+      <div className="vision-actions">
+        <button className="btn btn-sm" onClick={() => setShowHistory(!showHistory)}>📚 History</button>
+        <button className="btn btn-sm" onClick={exportVisionJSON}>Export JSON</button>
+        <button className="btn btn-sm" onClick={exportVisionCSV}>Export CSV</button>
+      </div>
+      </div>
     </div>
   );
 }
