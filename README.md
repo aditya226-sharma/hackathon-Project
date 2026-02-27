@@ -29,7 +29,7 @@ A privacy-first, offline-capable AI assistant that runs entirely in your browser
 - **Local Storage** - All data stored in your browser
 - **CSV Export** - Download your data as CSV
 - **JSON Export** - Export in JSON format
-- **Cloud Backup** - Optional Supabase integration
+- **Full Privacy** - No cloud, no external servers
 
 ## 🚀 Quick Start
 
@@ -74,23 +74,15 @@ web-starter-app/
 ├── public/
 │   ├── sw.js           # Service Worker for offline support
 │   └── manifest.json   # PWA manifest
-└── supabase-schema.sql # Database schema (optional)
 ```
 
 ## 🔧 Configuration
 
-### Supabase Setup (Optional)
-
-If you want cloud backup:
-
-1. Create a Supabase project at https://supabase.com
-2. Run the SQL in `supabase-schema.sql`
-3. Create storage bucket `chat-exports` (see `SUPABASE_STORAGE_SETUP.md`)
-4. Update credentials in `src/supabse.ts`
+All data is stored locally in your browser. No external configuration needed.
 
 ### Privacy Mode
 
-Privacy mode is **enabled by default**. When enabled:
+Privacy mode is **enabled by default**. All data stays on your device:
 - No data sent to cloud
 - All processing on-device
 - Data stored locally only

@@ -56,12 +56,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
         <div className="settings-section">
           <h3>🔒 Privacy Mode</h3>
-          <p>Control whether your data is logged to cloud storage</p>
+          <p>All data is stored locally on your device</p>
           <label className="toggle-switch">
             <input type="checkbox" checked={privacyMode} onChange={togglePrivacy} />
             <span className="toggle-slider"></span>
             <span className="toggle-label">
-              {privacyMode ? 'Private (No cloud logging)' : 'Logging enabled'}
+              {privacyMode ? 'Private (Local only)' : 'Local storage'}
             </span>
           </label>
         </div>
@@ -86,8 +86,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
           <h3>ℹ️ How Your Data is Used</h3>
           <ul style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-muted)' }}>
             <li>✓ All AI processing happens on your device</li>
-            <li>✓ No data sent to external servers when privacy mode is ON</li>
-            <li>✓ Local storage only (you have full control)</li>
+            <li>✓ All data stored locally in your browser</li>
+            <li>✓ No cloud storage or external servers</li>
             <li>✓ Export or delete your data anytime</li>
           </ul>
         </div>

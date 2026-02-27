@@ -97,9 +97,9 @@ export function App() {
               padding: '4px 10px',
               fontSize: '11px'
             }}
-            title={privacyMode ? 'Privacy Mode: ON - All data stays on your device' : 'Privacy Mode: OFF - Data may be logged'}
+            title="Privacy Mode - All data stays on your device"
           >
-            🔒 {privacyMode ? 'Private' : 'Logging'}
+            🔒 Private
           </button>
           <button 
             className="btn btn-sm" 

@@ -3,7 +3,6 @@ import { ModelCategory } from '@runanywhere/web';
 import { TextGeneration } from '@runanywhere/web-llamacpp';
 import { useModelLoader } from '../hooks/useModelLoader';
 import { ModelBanner } from './ModelBanner';
-import { saveChatMessages } from '../supabse';
 import { saveLocalMessage } from '../dataControl';
 
 interface Message {
@@ -95,19 +94,6 @@ export function ChatTab() {
         timestamp: new Date().toISOString(),
         stats: finalMessage.stats
       });
-
-      // Optionally save to cloud if privacy mode is off
-      saveChatMessages([
-        { role: 'user', message: text, timestamp: new Date().toISOString() },
-        { 
-          role: 'assistant', 
-          message: finalMessage.text, 
-          tokens: finalMessage.stats.tokens, 
-          tok_per_sec: finalMessage.stats.tokPerSec, 
-          latency_ms: finalMessage.stats.latencyMs, 
-          timestamp: new Date().toISOString() 
-        }
-      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessages((prev) => {
